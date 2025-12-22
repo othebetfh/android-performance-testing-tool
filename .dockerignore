@@ -1,0 +1,73 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+
+# Output and temporary files
+output/
+tmp/
+temp/
+*.log
+*.apk
+*.perfetto-trace
+
+# Environment files
+.env
+.env.*
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Testing
+tests/
+.tox/
+.nox/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Scripts (keep in image)
+!scripts/
+
+# Android SDK (will be installed in image)
+android-sdk/
+
+# Cloned repos
+repos/
+cloned/
