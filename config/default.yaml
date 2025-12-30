@@ -1,52 +1,48 @@
-# Default configuration for perftest
-# Override with environment variables or custom config file
+# ===================================================================
+# Performance Testing Tool - Default Configuration
+# ===================================================================
+#
+# This file contains default settings for the performance testing tool.
+# These can be overridden via environment variables or custom config files.
+#
+# ===================================================================
 
+# Build Configuration
 build:
   repository_url: "https://github.com/worldcoin/wld-android"
   default_branch: "main"
-  gradle_tasks:
-    - "assembleDebug"
-    - "assembleDebugAndroidTest"
   gradle_options:
     - "--no-daemon"
     - "--stacktrace"
-  java_heap_size: "4g"
 
+# AWS Device Farm Configuration
 devicefarm:
-  # REQUIRED: Set via environment variable AWS_DEVICEFARM_PROJECT_ARN
-  project_arn: ""
   region: "us-west-2"
-  default_device_pool: "Top Devices"
   test_timeout: 3600
   test_type: "INSTRUMENTATION"
-  download_types:
-    - "INSTRUMENTATION_OUTPUT"
-    - "CUSTOMER_ARTIFACT"
-    - "VIDEO"
-    - "SCREENSHOT"
-  traces_enabled: true
   traces_pattern: "*.perfetto-trace"
 
+# Test Execution Configuration
+test_execution:
+  # Maximum number of retry attempts for failed test runs (no traces)
+  max_retries: 5
+
+  # Maximum number of iterations per batch
+  # Larger iteration counts will be split into multiple batches
+  batch_size: 50
+
+# Analysis Configuration
 analysis:
   trace_processor_path: "/usr/local/bin/trace_processor_shell"
-  enabled_queries:
-    - "frame_metrics"
-    - "cpu_usage"
-    - "memory_usage"
-    - "startup_time"
-  output_formats:
-    - "csv"
-    - "json"
-  include_raw_data: true
 
+# Output Configuration
 output:
   base_dir: "./output"
   apks_dir: "apks"
   traces_dir: "traces"
-  artifacts_dir: "artifacts"
-  reports_dir: "reports"
   cleanup_on_success: false
 
+# Logging Configuration
 logging:
   level: "INFO"
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

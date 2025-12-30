@@ -13,7 +13,7 @@ setup(
     install_requires=requirements,
     entry_points={
         "console_scripts": [
-            "perftest=perftest.cli:cli",
+            "perftest=perftest.container_cli:main",
         ],
     },
     python_requires=">=3.11",

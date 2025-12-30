@@ -6,7 +6,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Set up environment variables
 ENV ANDROID_HOME=/opt/android-sdk
 ENV ANDROID_SDK_ROOT=/opt/android-sdk
-ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 ENV PATH="${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/34.0.0:/usr/local/bin"
 
 # Layer 1: Install system dependencies
@@ -20,11 +19,21 @@ RUN apt-get update && apt-get install -y \
     python3.11-dev \
     python3-pip \
     build-essential \
+    libstdc++6 \
+    libc6 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create symlinks for python
 RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
     ln -sf /usr/bin/python3.11 /usr/bin/python
+
+# Detect JAVA_HOME dynamically (works for both amd64 and arm64)
+RUN DETECTED_JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) && \
+    echo "export JAVA_HOME=${DETECTED_JAVA_HOME}" >> /etc/profile && \
+    ln -sf ${DETECTED_JAVA_HOME} /usr/lib/jvm/java-17-openjdk
+
+# Set JAVA_HOME environment variable
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk
 
 # Upgrade pip
 RUN python3 -m pip install --upgrade pip setuptools wheel
@@ -45,12 +54,10 @@ RUN yes | sdkmanager --licenses && \
     "platform-tools" \
     "cmdline-tools;latest"
 
-# Layer 3: Install Perfetto trace processor
-RUN mkdir -p /usr/local/bin && \
-    cd /usr/local/bin && \
-    wget -q https://get.perfetto.dev/trace_processor && \
-    mv trace_processor trace_processor_shell && \
-    chmod +x trace_processor_shell
+# Layer 3: Prepare for Perfetto
+# Note: Perfetto Python library will auto-download its trace processor binary
+# We just ensure a proper cache directory exists
+RUN mkdir -p /root/.local/share/perfetto && chmod -R 755 /root/.local
 
 # Layer 4: Install Python dependencies
 WORKDIR /app
@@ -68,9 +75,10 @@ RUN pip3 install -e /app
 
 # Layer 6: Runtime setup
 # Create workspace directory for volume mounts
-RUN mkdir -p /workspace/output/{apks,traces,artifacts,reports}
+RUN mkdir -p /workspace/output
 WORKDIR /workspace
 
 # Set entry point
+# When no arguments provided, runs in interactive mode
+# When arguments provided, passes them to the CLI
 ENTRYPOINT ["python3", "-m", "perftest"]
-CMD ["--help"]

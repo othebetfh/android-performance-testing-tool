@@ -17,50 +17,28 @@ load_dotenv()
 
 class BuildConfig(BaseModel):
     """Build configuration."""
-    repository_url: str = Field(default="https://github.com/worldcoin/wld-android")
+    repository_url: str = Field(description="GitHub repository URL (required)")
     default_branch: str = Field(default="main")
-    gradle_tasks: list[str] = Field(default=["assembleDebug", "assembleDebugAndroidTest"])
     gradle_options: list[str] = Field(default=["--no-daemon", "--stacktrace"])
-    java_heap_size: str = Field(default="4g")
 
 
 class DeviceFarmConfig(BaseModel):
     """AWS Device Farm configuration."""
     project_arn: str = Field(default="")
     region: str = Field(default="us-west-2")
-    default_device_pool: str = Field(default="Top Devices")
     test_timeout: int = Field(default=3600)
     test_type: str = Field(default="INSTRUMENTATION")
-    download_types: list[str] = Field(default=[
-        "INSTRUMENTATION_OUTPUT",
-        "CUSTOMER_ARTIFACT",
-        "VIDEO",
-        "SCREENSHOT"
-    ])
-    traces_enabled: bool = Field(default=True)
     traces_pattern: str = Field(default="*.perfetto-trace")
 
 
 class AnalysisConfig(BaseModel):
     """Perfetto analysis configuration."""
     trace_processor_path: str = Field(default="/usr/local/bin/trace_processor_shell")
-    enabled_queries: list[str] = Field(default=[
-        "frame_metrics",
-        "cpu_usage",
-        "memory_usage",
-        "startup_time"
-    ])
-    output_formats: list[str] = Field(default=["csv", "json"])
-    include_raw_data: bool = Field(default=True)
 
 
 class OutputConfig(BaseModel):
     """Output configuration."""
     base_dir: str = Field(default="./output")
-    apks_dir: str = Field(default="apks")
-    traces_dir: str = Field(default="traces")
-    artifacts_dir: str = Field(default="artifacts")
-    reports_dir: str = Field(default="reports")
     cleanup_on_success: bool = Field(default=False)
 
 
@@ -89,8 +67,21 @@ class ConfigManager:
         Initialize configuration manager.
 
         Args:
-            config_path: Optional path to YAML configuration file
+            config_path: Optional path to YAML configuration file.
+                        If not provided, loads from config/default.yaml
         """
+        # Use default.yaml if no config path provided
+        if config_path is None:
+            # Try container path first (mounted at /workspace/config)
+            container_config = Path("/workspace/config/default.yaml")
+            if container_config.exists():
+                config_path = container_config
+            else:
+                # Fall back to relative path for local development
+                local_config = Path(__file__).parent.parent / "config" / "default.yaml"
+                if local_config.exists():
+                    config_path = local_config
+
         self.config_path = config_path
         self._config: Optional[Config] = None
         self._load_config()
@@ -118,17 +109,11 @@ class ConfigManager:
 
     def _apply_env_overrides(self, config_dict: Dict[str, Any]) -> Dict[str, Any]:
         """Apply environment variable overrides to configuration."""
-        # Build config overrides
-        if "GITHUB_REPO_URL" in os.environ:
-            config_dict.setdefault("build", {})["repository_url"] = os.environ["GITHUB_REPO_URL"]
-
         # Device Farm overrides
         if "AWS_DEVICEFARM_PROJECT_ARN" in os.environ:
             config_dict.setdefault("devicefarm", {})["project_arn"] = os.environ["AWS_DEVICEFARM_PROJECT_ARN"]
         if "AWS_DEFAULT_REGION" in os.environ:
             config_dict.setdefault("devicefarm", {})["region"] = os.environ["AWS_DEFAULT_REGION"]
-        if "DEVICEFARM_DEVICE_POOL" in os.environ:
-            config_dict.setdefault("devicefarm", {})["default_device_pool"] = os.environ["DEVICEFARM_DEVICE_POOL"]
 
         # Analysis overrides
         if "PERFETTO_PATH" in os.environ:
@@ -175,7 +160,7 @@ class ConfigManager:
         Get output directory path.
 
         Args:
-            subdir: Optional subdirectory name (apks, traces, artifacts, reports)
+            subdir: Optional subdirectory name
 
         Returns:
             Path: Full path to output directory
@@ -183,18 +168,10 @@ class ConfigManager:
         base = Path(self.config.output.base_dir)
 
         if subdir:
-            subdir_map = {
-                "apks": self.config.output.apks_dir,
-                "traces": self.config.output.traces_dir,
-                "artifacts": self.config.output.artifacts_dir,
-                "reports": self.config.output.reports_dir,
-            }
-            subdir_name = subdir_map.get(subdir, subdir)
-            return base / subdir_name
+            return base / subdir
 
         return base
 
     def ensure_output_dirs(self) -> None:
-        """Create all output directories if they don't exist."""
-        for subdir in ["apks", "traces", "artifacts", "reports"]:
-            self.get_output_dir(subdir).mkdir(parents=True, exist_ok=True)
+        """Create base output directory if it doesn't exist."""
+        self.get_output_dir().mkdir(parents=True, exist_ok=True)

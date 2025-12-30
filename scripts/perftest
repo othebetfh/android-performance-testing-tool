@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+#
+# Smart wrapper for perftest that automatically selects the correct Docker image
+# - Uses amd64 for build operations (APK building)
+# - Uses arm64 for analysis operations (Perfetto processing)
+# - Uses host-based interactive mode for multi-platform support
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Load .env file if it exists
+ENV_FILE="${PROJECT_DIR}/.env"
+if [ -f "${ENV_FILE}" ]; then
+    set -a
+    source "${ENV_FILE}"
+    set +a
+fi
+
+# Default image
+IMAGE_NAME="perftest"
+
+# Detect host architecture for platform selection
+HOST_ARCH="$(uname -m)"
+case "${HOST_ARCH}" in
+    arm64|aarch64)
+        # On ARM64 (Apple Silicon), use ARM64 for operations except APK build
+        DEFAULT_PLATFORM="arm64"
+        ;;
+    x86_64|amd64)
+        # On x86_64, use AMD64 for all operations
+        DEFAULT_PLATFORM="amd64"
+        ;;
+    *)
+        # Unknown architecture, default to AMD64
+        DEFAULT_PLATFORM="amd64"
+        ;;
+esac
+
+# Detect which platform to use based on command
+COMMAND="${1:-}"
+
+# Check if command provided
+if [ -z "$COMMAND" ]; then
+    echo "ERROR: Command required"
+    echo ""
+    echo "Usage: ./scripts/perftest <command> [options]"
+    echo ""
+    echo "Available commands:"
+    echo "  build-apk           Build APK from source"
+    echo "  upload-and-test     Upload APK and run tests"
+    echo "  analyze             Analyze performance results"
+    echo "  full-pipeline       Run complete pipeline"
+    echo ""
+    echo "For interactive mode, use:"
+    echo "  ./scripts/perftest-interactive"
+    echo ""
+    exit 1
+fi
+
+case "${COMMAND}" in
+    build-apk|build)
+        # APK building always requires AMD64 for AAPT2
+        IMAGE_TAG="amd64"
+        PLATFORM_NOTE="(using amd64 for APK building)"
+        ;;
+    analyze|upload-and-test|full-pipeline)
+        # Use host-appropriate platform
+        IMAGE_TAG="${DEFAULT_PLATFORM}"
+        PLATFORM_NOTE="(using ${DEFAULT_PLATFORM} based on host architecture)"
+        ;;
+    *)
+        # Default to host-appropriate platform
+        IMAGE_TAG="${DEFAULT_PLATFORM}"
+        PLATFORM_NOTE="(using ${DEFAULT_PLATFORM})"
+        ;;
+esac
+
+# Check if required image exists
+if ! docker image inspect "${IMAGE_NAME}:${IMAGE_TAG}" &> /dev/null; then
+    echo "Error: Docker image '${IMAGE_NAME}:${IMAGE_TAG}' not found!"
+    echo ""
+    echo "Please build the images first:"
+    echo "  ./scripts/build-all-platforms.sh"
+    echo ""
+    exit 1
+fi
+
+# Output directory
+OUTPUT_DIR="${PROJECT_DIR}/output"
+mkdir -p "${OUTPUT_DIR}"
+
+# Config directory
+CONFIG_DIR="${PROJECT_DIR}/config"
+
+# Echo platform selection
+if [ -n "${COMMAND}" ]; then
+    echo "Running: ${COMMAND} ${PLATFORM_NOTE}"
+fi
+
+# Run the container
+docker run --rm -it \
+    --platform "linux/${IMAGE_TAG}" \
+    -v "${OUTPUT_DIR}:/workspace/output" \
+    -v "${CONFIG_DIR}:/workspace/config" \
+    -e AWS_ACCESS_KEY_ID \
+    -e AWS_SECRET_ACCESS_KEY \
+    -e AWS_SESSION_TOKEN \
+    -e AWS_REGION \
+    -e GITHUB_TOKEN \
+    -e GITHUB_USER \
+    "${IMAGE_NAME}:${IMAGE_TAG}" \
+    "$@"

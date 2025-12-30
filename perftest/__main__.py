@@ -1,6 +1,8 @@
 """Entry point for running perftest as a module."""
 
-from perftest.cli import cli
+import sys
+from perftest.container_cli import main
 
 if __name__ == "__main__":
-    cli()
+    # Container CLI for command execution
+    main()

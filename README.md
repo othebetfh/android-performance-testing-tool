@@ -1,366 +1,269 @@
-# Android Performance Testing Tool (perftest)
+# Android Performance Testing Tool
 
 A Docker-based tool for automated Android app performance testing using AWS Device Farm and Perfetto trace analysis.
 
-## Features
+### Container Architecture
 
-- **Automated APK Building**: Clone and build APKs from specific commits of private GitHub repositories
-- **AWS Device Farm Integration**: Upload APKs, run instrumentation tests, and download results
-- **Perfetto Trace Analysis**: Analyze performance traces with SQL queries and pandas
-- **Docker-based**: Fully containerized with Android SDK, Python 3.11, and Perfetto tools
-- **CLI Interface**: Easy-to-use command-line interface with rich output
+**Docker Images** (pre-built templates):
+- `perftest:amd64` - For APK building (AAPT2 requires x86_64)
+- `perftest:arm64` - For Perfetto analysis (optimized for ARM64)
+- `perftest:latest` - Defaults to ARM64
 
-## Quick Start
+### Platform Selection Logic
 
-### Prerequisites
+| Operation | On ARM64 Host (Apple Silicon) | On x86_64 Host |
+|-----------|-------------------------------|----------------|
+| Build APK | AMD64 (required for AAPT2) | AMD64 |
+| Run Tests | ARM64 (faster) | AMD64 |
+| Analyze | ARM64 (optimized) | AMD64 |
+| Full Pipeline | ARM64 | AMD64 |
 
-- Docker installed
-- GitHub Personal Access Token with access to worldcoin/wld-android repo
+The system automatically detects your host architecture and selects the optimal container platform.
+
+## Prerequisites
+
+- Docker installed and running
+- GitHub Personal Access Token with repository access
 - AWS credentials with Device Farm permissions
-- AWS Device Farm project ARN
+- Property files and google-services.json for your Android app
 
-### 1. Clone and Setup
+## Setup
+
+### 1. Configure Credentials
+
+Create a `.env` file with your credentials:
 
 ```bash
-git clone <your-repo>
-cd performance-testing-app
-
-# Copy environment template and fill in your credentials
+# Copy template
 cp .env.example .env
-# Edit .env and add your credentials
-```
 
-### 2. Build Docker Image
-
-```bash
-./scripts/build-docker.sh
-```
-
-This will create a Docker image with:
-- Ubuntu 22.04
-- Android SDK (API 34, Build Tools 34.0.0)
-- Java 17
-- Python 3.11
-- Perfetto trace processor
-- perftest CLI tool
-
-### 3. Validate Environment
-
-```bash
-./scripts/run-docker.sh validate
-```
-
-This checks that all dependencies and environment variables are configured correctly.
-
-### 4. Run Tests
-
-```bash
-# Build APKs from a commit
-./scripts/run-docker.sh build --commit <commit-hash>
-
-# Run tests on Device Farm (using pre-built APKs)
-./scripts/run-docker.sh test \
-  --app-apk /workspace/output/apks/app-debug.apk \
-  --test-apk /workspace/output/apks/app-debug-androidTest.apk
-
-# Analyze Perfetto traces
-./scripts/run-docker.sh analyze --trace-dir /workspace/output/traces
-
-# Run complete pipeline
-./scripts/run-docker.sh full-run --commit <commit-hash>
-```
-
-## CLI Commands
-
-### `perftest build`
-Build APKs from source repository.
-
-```bash
-perftest build --commit <hash> [--build-type debug|release]
-```
-
-**Options:**
-- `--commit`: Git commit hash to build (required)
-- `--github-token`: GitHub PAT (or set GITHUB_PAT env var)
-- `--build-type`: Build type - debug or release (default: debug)
-
-**Outputs:**
-- `output/apks/app-debug.apk`
-- `output/apks/app-debug-androidTest.apk`
-
-### `perftest test`
-Run tests on AWS Device Farm.
-
-```bash
-perftest test \
-  --app-apk <path> \
-  --test-apk <path> \
-  [--device-pool <name>] \
-  [--run-name <name>]
-```
-
-**Options:**
-- `--app-apk`: Path to app APK (required)
-- `--test-apk`: Path to test APK (required)
-- `--device-pool`: Device pool name or ARN
-- `--project-arn`: Device Farm project ARN (or set AWS_DEVICEFARM_PROJECT_ARN env var)
-- `--run-name`: Test run identifier
-- `--timeout`: Test timeout in seconds (default: 3600)
-- `--download-traces/--no-download-traces`: Download Perfetto traces (default: true)
-- `--download-artifacts/--no-download-artifacts`: Download test artifacts (default: true)
-
-**Outputs:**
-- Test run results
-- `output/traces/*.perfetto-trace`
-- `output/artifacts/` (logs, videos, screenshots)
-
-### `perftest analyze`
-Analyze Perfetto trace files.
-
-```bash
-perftest analyze \
-  --trace-file <path> \
-  [--query <name>] \
-  [--output-format csv|json|html]
-```
-
-**Options:**
-- `--trace-file`: Single trace file to analyze
-- `--trace-dir`: Directory containing trace files
-- `--query`: Named query to run (can specify multiple)
-- `--custom-query`: Path to custom SQL query file
-- `--output-format`: Output format - csv, json, or html (default: csv)
-
-**Available Queries:**
-- `frame_metrics`: Frame rendering metrics (frame time, jank)
-- `cpu_usage`: CPU usage by thread
-- `memory_usage`: Memory allocation events
-- `startup_time`: App startup metrics
-
-**Outputs:**
-- `output/reports/*.csv` or `*.json`
-- Analysis summary
-
-### `perftest full-run`
-Execute complete pipeline: build → test → analyze.
-
-```bash
-perftest full-run --commit <hash> [options]
-```
-
-**Options:**
-- `--commit`: Git commit to test (required)
-- `--github-token`: GitHub PAT
-- `--device-pool`: Device pool name
-- `--project-arn`: Device Farm project ARN
-- `--run-name`: Test run identifier
-- `--skip-build`: Skip build step (use existing APKs)
-- `--skip-analysis`: Skip analysis step
-
-### `perftest validate`
-Validate environment and configuration.
-
-```bash
-perftest validate
-```
-
-Checks:
-- Configuration loading
-- Output directories
-- Environment variables
-- Android SDK (in Docker)
-- Perfetto tools
-
-## Configuration
-
-### Environment Variables
-
-Create a `.env` file based on `.env.example`:
-
-```bash
-# GitHub Authentication
-GITHUB_PAT=ghp_xxxxxxxxxxxxx
-
+# Edit .env and add:
 # AWS Credentials
-AWS_ACCESS_KEY_ID=AKIAXXXXXXXXXXXXX
-AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-AWS_DEFAULT_REGION=us-west-2
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+AWS_SESSION_TOKEN=your_session_token  # Optional
+AWS_REGION=us-west-2
 
-# AWS Device Farm
-AWS_DEVICEFARM_PROJECT_ARN=arn:aws:devicefarm:us-west-2:123456789:project/abc-def
-DEVICEFARM_DEVICE_POOL=Top Devices
+# GitHub Credentials
+GITHUB_TOKEN=your_github_token
+GITHUB_USER=your_github_username
 ```
 
-### Configuration File
+### 2. Add Property Files
 
-Customize behavior with `config/default.yaml` or provide your own:
+Place your Android app property files in `config/properties/`:
 
 ```bash
-perftest --config /path/to/config.yaml <command>
+config/properties/
+├── dev.properties
+├── prod.properties
+└── google-services.json
 ```
 
-See `config/default.yaml` for all available options.
+### 3. Build Docker Images
 
-## Docker Usage
-
-### Build Image
+Build both AMD64 and ARM64 images:
 
 ```bash
-docker build -t perftest:latest .
+./scripts/build-all-platforms.sh
 ```
 
-### Run Container
+This creates:
+- `perftest:amd64` - For APK building
+- `perftest:arm64` - For Perfetto analysis
+- `perftest:latest` - Defaults to ARM64
+
+## Usage
+
+### Interactive Mode
+
+Launch the interactive menu (runs on host, launches containers per operation):
 
 ```bash
-docker run --rm -it \
-  -v $(pwd)/output:/workspace/output \
-  -e GITHUB_PAT=$GITHUB_PAT \
-  -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-  -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
-  -e AWS_DEVICEFARM_PROJECT_ARN=$AWS_DEVICEFARM_PROJECT_ARN \
-  perftest:latest \
-  <command>
+./scripts/perftest-interactive
 ```
 
-Or use the helper script:
+**Menu options:**
+1. **Build APK from source** - Always uses AMD64 container
+2. **Run performance test on Device Farm** - Uses host-appropriate container
+3. **Analyze performance test runs** - Uses host-appropriate container
+4. **Full pipeline** (build → test → analyze) - Uses host-appropriate container
+5. **Exit**
+
+**How it works:**
+- Menu runs on your host machine
+- Each option launches the appropriate Docker container
+- Container executes the operation and stops
+- You return to the menu for the next operation
+
+### Command-Line Mode
+
+Run commands directly with automatic platform selection:
+
+#### Build APK
 
 ```bash
-./scripts/run-docker.sh <command>
+./scripts/perftest build-apk \
+  --branch main \
+  --commit abc123 \
+  --product-flavor dev \
+  --build-type perf
 ```
+
+#### Upload and Test
+
+```bash
+./scripts/perftest upload-and-test \
+  --branch main \
+  --commit abc123 \
+  --project-arn arn:aws:devicefarm:us-west-2:xxx:project:xxx \
+  --device-pool-arn arn:aws:devicefarm:us-west-2:xxx:devicepool:xxx \
+  --test-name coldStartup \
+  --num-iterations 50
+```
+
+#### Analyze Results
+
+```bash
+./scripts/perftest analyze \
+  --base-branch main \
+  --base-commit abc123 \
+  --test-branch feature \
+  --test-commit def456 \
+  --device-pool "Samsung Galaxy S22 - OS13" \
+  --test-name coldStartup
+```
+
+#### Full Pipeline
+
+```bash
+./scripts/perftest full-pipeline \
+  --base-branch main \
+  --base-commit abc123 \
+  --test-branch feature \
+  --test-commit def456 \
+  --project-arn arn:aws:devicefarm:us-west-2:xxx:project:xxx \
+  --device-pool-arn arn:aws:devicefarm:us-west-2:xxx:devicepool:xxx \
+  --test-name coldStartup \
+  --num-iterations 50
+```
+
+## Environment Variables
+
+All credentials are automatically loaded from the `.env` file. Required variables:
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `AWS_ACCESS_KEY_ID` | AWS access key | Yes |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret key | Yes |
+| `AWS_SESSION_TOKEN` | AWS session token | No |
+| `AWS_REGION` | AWS region (e.g., us-west-2) | Yes |
+| `GITHUB_TOKEN` | GitHub personal access token | Yes |
+| `GITHUB_USER` | GitHub username | Yes |
 
 ## Project Structure
 
 ```
 performance-testing-app/
-├── Dockerfile                    # Docker image definition
-├── requirements.txt              # Python dependencies
-├── setup.py                      # Package setup
-├── .env.example                  # Environment template
 ├── config/
-│   └── default.yaml             # Default configuration
+│   ├── default.yaml           # Default configuration
+│   └── properties/             # Android properties and configuration files
+├── output/                     # Test results and analysis (git-ignored)
+├── perftest/                   # Python package
+│   ├── analysis/              # Trace analysis modules
+│   ├── build/                 # APK building modules
+│   ├── commands/              # Command implementations
+│   ├── interactive.py         # Interactive mode functions
+│   ├── container_cli.py       # Container entry point
+│   └── config.py              # Configuration management
 ├── scripts/
-│   ├── build-docker.sh          # Build Docker image
-│   └── run-docker.sh            # Run Docker container
-├── perftest/                    # Main Python package
-│   ├── cli.py                   # CLI commands
-│   ├── config.py                # Configuration management
-│   ├── logger.py                # Logging setup
-│   ├── build/                   # APK build component
-│   ├── devicefarm/              # AWS Device Farm integration
-│   ├── analysis/                # Perfetto analysis
-│   └── utils/                   # Utilities
-├── queries/                     # SQL query templates
-└── output/                      # Runtime output
-    ├── apks/                    # Built APKs
-    ├── traces/                  # Perfetto traces
-    ├── artifacts/               # Device Farm artifacts
-    └── reports/                 # Analysis reports
+│   ├── build-all-platforms.sh    # Build both Docker images
+│   ├── build-docker.sh           # Build single platform
+│   ├── perftest                  # Command-line entry point
+│   └── perftest-interactive      # Interactive menu (host-based)
+├── queries/                    # SQL queries for Perfetto analysis
+├── .env                       # Credentials (create from .env.example)
+├── .env.example              # Template for .env
+├── Dockerfile                # Docker image definition
+└── README.md                # This file
 ```
 
 ## Development
 
-### Local Setup (without Docker)
+### Building Images
 
 ```bash
-# Create virtual environment
-python3.11 -m venv venv
-source venv/bin/activate
+# Build both platforms
+./scripts/build-all-platforms.sh
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Install package in editable mode
-pip install -e .
-
-# Run CLI
-perftest --help
+# Build single platform
+DOCKER_PLATFORM_OVERRIDE=linux/amd64 ./scripts/build-docker.sh
+DOCKER_PLATFORM_OVERRIDE=linux/arm64 ./scripts/build-docker.sh
 ```
 
-### Requirements
-
-- Python 3.11+
-- Android SDK (for local development)
-- Perfetto trace_processor_shell
-
-## Implementation Status
-
-### ✅ Phase 1: Foundation (Completed)
-- [x] Project structure
-- [x] Configuration management
-- [x] CLI skeleton with Click
-- [x] Logging with Rich
-- [x] Dockerfile with Android SDK + Python
-- [x] Helper scripts
-
-### 🚧 Phase 2: Build Component (In Progress)
-- [ ] Git cloning with GitHub authentication
-- [ ] Gradle build execution
-- [ ] APK validation
-
-### 📋 Phase 3: Device Farm Component (Pending)
-- [ ] Boto3 client wrapper
-- [ ] APK upload
-- [ ] Test run creation and monitoring
-- [ ] Artifact download
-
-### 📋 Phase 4: Analysis Component (Pending)
-- [ ] Perfetto trace processor wrapper
-- [ ] SQL query library
-- [ ] Data analysis with pandas
-- [ ] Report generation
-
-### 📋 Phase 5: Integration (Pending)
-- [ ] Full-run command implementation
-- [ ] Error handling and retry logic
-- [ ] Progress indicators
-
-### 📋 Phase 6: Polish (Pending)
-- [ ] Comprehensive testing
-- [ ] Documentation
-- [ ] Performance optimization
-
-## Troubleshooting
-
-### Docker build fails
+### Testing in Containers
 
 ```bash
-# Clean build
-docker build --no-cache -t perftest:latest .
+# Run ARM64 container with shell
+docker run --rm -it \
+  -v "$(pwd)/output:/workspace/output" \
+  -v "$(pwd)/config:/workspace/config" \
+  perftest:arm64 bash
+
+# Run AMD64 container with shell
+docker run --rm -it \
+  -v "$(pwd)/output:/workspace/output" \
+  -v "$(pwd)/config:/workspace/config" \
+  perftest:amd64 bash
 ```
 
-### Missing environment variables
+### Rebuilding After Code Changes
+
+After modifying Python code:
 
 ```bash
-# Check .env file
-cat .env
+# Rebuild both images
+./scripts/build-all-platforms.sh
 
-# Or export manually
-export GITHUB_PAT=your_token
-export AWS_ACCESS_KEY_ID=your_key
+# Or rebuild single platform
+DOCKER_PLATFORM_OVERRIDE=linux/amd64 ./scripts/build-docker.sh
 ```
 
-### Android SDK issues (in Docker)
+## Advanced Usage
+
+### Custom Configuration
+
+Override default configuration by setting environment variables:
 
 ```bash
-# Check SDK installation
-docker run --rm perftest:latest bash -c "ls -la $ANDROID_HOME"
+# Set custom output directory
+export PERFTEST_OUTPUT_DIR=/custom/output
+
+# Set log level
+export PERFTEST_LOG_LEVEL=DEBUG
+
+# Set custom Perfetto path (in container)
+export PERFETTO_PATH=/custom/trace_processor_shell
 ```
 
-### Perfetto not found
+### Cached Builds
+
+The tool caches built APKs per commit. If APKs exist for a branch/commit combination, they're reused instead of rebuilding:
+
+```
+✓ Using cached build: feature-branch@abc12345
+```
+
+To force rebuild, delete the cached directory:
 
 ```bash
-# Check Perfetto installation
-docker run --rm perftest:latest bash -c "which trace_processor_shell"
+rm -rf output/<branch>_<commit>/apks/
 ```
 
 ## License
 
-[Your License Here]
+[Your License]
 
 ## Contributing
 
-[Contributing guidelines]
-
-## Contact
-
-[Contact information]
+[Your Contributing Guidelines]

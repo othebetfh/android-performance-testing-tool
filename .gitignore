@@ -4,7 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
+/build/
 develop-eggs/
 dist/
 downloads/
@@ -54,6 +54,9 @@ dmypy.json
 .env
 .env.local
 
+# Properties files (may contain sensitive data)
+config/properties/*
+
 # Output directories
 output/
 *.apk
@@ -64,6 +67,9 @@ output/
 tmp/
 temp/
 *.tmp
+
+# Jupyter
+.ipynb_checkpoints/
 
 # Android SDK (if downloaded locally)
 android-sdk/

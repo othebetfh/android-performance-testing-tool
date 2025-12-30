@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+#
+# Interactive menu (runs on host, launches containers per operation)
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Load .env file if it exists
+ENV_FILE="${PROJECT_DIR}/.env"
+if [ -f "${ENV_FILE}" ]; then
+    set -a
+    source "${ENV_FILE}"
+    set +a
+fi
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+show_menu() {
+    clear
+    echo -e "${CYAN}======================================================${NC}"
+    echo -e "${CYAN}  Android Performance Testing Tool - Interactive Mode  ${NC}"
+    echo -e "${CYAN}======================================================${NC}"
+    echo ""
+    echo "1) Build APK from source"
+    echo "2) Run performance test on Device Farm"
+    echo "3) Analyze performance test runs"
+    echo "4) Full pipeline (build → test → analyze)"
+    echo "5) Exit"
+    echo ""
+}
+
+run_in_container() {
+    local command=$1
+    local platform=$2
+    local image="perftest:${platform}"
+
+    # Check if image exists
+    if ! docker image inspect "${image}" &> /dev/null; then
+        echo -e "${RED}Error: Docker image '${image}' not found!${NC}"
+        echo ""
+        echo "Please build the images first:"
+        echo "  ./scripts/build-all-platforms.sh"
+        echo ""
+        return 1
+    fi
+
+    # Run command in container
+    docker run --rm -it \
+        --platform "linux/${platform}" \
+        -v "${PROJECT_DIR}/output:/workspace/output" \
+        -v "${PROJECT_DIR}/config:/workspace/config" \
+        -e AWS_ACCESS_KEY_ID \
+        -e AWS_SECRET_ACCESS_KEY \
+        -e AWS_SESSION_TOKEN \
+        -e AWS_REGION \
+        -e GITHUB_TOKEN \
+        -e GITHUB_USER \
+        "${image}" \
+        "${command}"
+}
+
+# Detect host architecture for platform selection
+HOST_ARCH="$(uname -m)"
+case "${HOST_ARCH}" in
+    arm64|aarch64)
+        # On ARM64 (Apple Silicon), use ARM64 for operations except APK build
+        DEFAULT_PLATFORM="arm64"
+        ;;
+    x86_64|amd64)
+        # On x86_64, use AMD64 for all operations
+        DEFAULT_PLATFORM="amd64"
+        ;;
+    *)
+        # Unknown architecture, default to AMD64
+        DEFAULT_PLATFORM="amd64"
+        ;;
+esac
+
+# Main loop
+while true; do
+    show_menu
+    read -p "Select operation: " choice
+    echo ""
+
+    case $choice in
+        1)
+            # Build - always requires AMD64 (AAPT2 compatibility)
+            run_in_container "build-interactive" "amd64"
+            ;;
+        2)
+            # Test - use host-appropriate platform
+            run_in_container "test-interactive" "${DEFAULT_PLATFORM}"
+            ;;
+        3)
+            # Analyze - use host-appropriate platform
+            run_in_container "analyze-interactive" "${DEFAULT_PLATFORM}"
+            ;;
+        4)
+            # Full pipeline - use host-appropriate platform
+            run_in_container "full-pipeline-interactive" "${DEFAULT_PLATFORM}"
+            ;;
+        5)
+            echo "Exiting..."
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Invalid choice. Please select 1-5.${NC}"
+            sleep 2
+            continue
+            ;;
+    esac
+
+    echo ""
+    read -p "Press Enter to continue..."
+done

@@ -1,0 +1,53 @@
+version: 0.1
+
+android_test_host: amazon_linux_2
+ios_test_host: macos_sequoia
+
+phases:
+  install:
+    commands:
+      - devicefarm-cli use python 3.11
+      - python --version
+
+  pre_test:
+    commands:
+      - OUTPUT_FILE="/tmp/perf_results.log"
+
+  test:
+    commands:
+      - |
+        adb wait-for-device
+
+        until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+        echo "Waiting for sys.boot_completed..."
+        sleep 2
+        done
+
+        echo "Device booted. Checking packages..."
+        adb shell pm list packages | grep -F com.worldcoin.dev || (echo "App missing"; exit 1)
+        adb shell pm list instrumentation | grep -F com.worldcoin.benchmark || (echo "Instrumentation missing"; exit 1)
+
+        sleep 30
+        echo "Running instrumentation..."
+        adb shell am instrument -w \
+          {{TEST_SELECTOR}} \
+          -e numIterations {{NUM_ITERATIONS}} \
+          com.worldcoin.benchmark/androidx.test.runner.AndroidJUnitRunner | tee $OUTPUT_FILE
+
+  post_test:
+    commands:
+      - cp $OUTPUT_FILE $DEVICEFARM_LOG_DIR
+      - adb pull /storage/emulated/0/Android/media/com.worldcoin.benchmark $DEVICEFARM_LOG_DIR/traces || true
+      - |
+        # Compress traces if they exist to stay under 1GB artifact limit
+        if [ -d "$DEVICEFARM_LOG_DIR/traces" ]; then
+          cd $DEVICEFARM_LOG_DIR
+          tar -czf traces.tar.gz traces/
+          rm -rf traces/
+          echo "Compressed traces to traces.tar.gz"
+          ls -lh traces.tar.gz
+        fi
+
+
+artifacts:
+  - $DEVICEFARM_LOG_DIR

@@ -1,0 +1,14 @@
+# Available benchmark tests configuration
+
+test_classes:
+  - class: com.worldcoin.benchmark.PerformanceBenchmark
+    tests:
+      - name: coldStartup
+        description: Cold startup performance test
+
+#      - name: warmStartup
+#        description: Warm startup performance test
+#      - name: hotStartup
+#        description: Hot startup performance test
+#      - name: coldStartupToAppTabNavigation
+#        description: Cold startup to app tab navigation test
