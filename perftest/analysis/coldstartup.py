@@ -242,7 +242,7 @@ def create_batch_aware_analysis(
     base_df, test_df = process_base_and_test_traces(
         base_traces_dir,
         test_traces_dir,
-        max_workers=None,  # Use CPU count
+        max_workers=4,  # Conservative value to avoid resource contention
         use_cache=True
     )
     print(f"✓ Processed {len(base_df)} base traces and {len(test_df)} test traces")

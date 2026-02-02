@@ -7,6 +7,7 @@ with optimized SQL queries and result caching.
 
 import json
 import re
+import time
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -58,31 +59,72 @@ class TraceMetrics:
     run_arn: str
 
 
-def extract_startup_metrics_from_trace(trace_path: Path) -> Optional[Tuple[float, float]]:
+def extract_startup_metrics_from_trace(trace_path: Path, max_retries: int = 5) -> Optional[Tuple[float, float]]:
     """
     Extract startup metrics from a single trace file using optimized SQL query.
 
     Args:
         trace_path: Path to the perfetto trace file
+        max_retries: Maximum number of retry attempts for handling file locking issues
 
     Returns:
         Tuple of (startup_latency_ms, render_latency_ms) or None if extraction fails
     """
-    try:
-        from perfetto.trace_processor import TraceProcessor
+    from perfetto.trace_processor import TraceProcessor
 
-        tp = TraceProcessor(trace=str(trace_path))
-        result = tp.query(STARTUP_METRICS_QUERY).as_pandas_dataframe()
-        tp.close()
+    last_error = None
+    for attempt in range(max_retries):
+        tp = None
+        try:
+            tp = TraceProcessor(trace=str(trace_path))
+            result = tp.query(STARTUP_METRICS_QUERY).as_pandas_dataframe()
 
-        if len(result) > 0 and pd.notna(result.iloc[0]['startup_latency_ms']):
-            startup_ms = result.iloc[0]['startup_latency_ms']
-            render_ms = result.iloc[0]['render_latency_ms']
-            return startup_ms, render_ms
-    except Exception:
-        # Silent failure - let the caller handle missing data
-        pass
+            if len(result) > 0 and pd.notna(result.iloc[0]['startup_latency_ms']):
+                startup_ms = result.iloc[0]['startup_latency_ms']
+                render_ms = result.iloc[0]['render_latency_ms']
+                return startup_ms, render_ms
 
+            # If no valid data, don't retry
+            return None
+
+        except Exception as e:
+            error_str = str(e).lower()
+            # Check if this is a retryable error (resource contention)
+            is_retryable = (
+                isinstance(e, OSError) and getattr(e, 'errno', None) == 26
+            ) or any(phrase in error_str for phrase in [
+                'text file busy',
+                'failed to start',
+                'resource temporarily unavailable'
+            ])
+
+            if is_retryable:
+                last_error = e
+                if attempt < max_retries - 1:
+                    # Exponential backoff with jitter to reduce collision probability
+                    sleep_time = (0.1 * (2 ** attempt)) + (time.time() % 0.05)
+                    time.sleep(sleep_time)
+                    continue
+                else:
+                    # Last attempt failed, print error and return None
+                    print(f"Invalid trace (max retries exceeded): {trace_path}")
+                    print(f"Last error: {last_error}")
+                    return None
+            else:
+                # Non-retryable error, fail immediately
+                print(f"Invalid trace: {trace_path}")
+                print(f"Error: {e}")
+                return None
+
+        finally:
+            # Always close the trace processor if it was created
+            if tp is not None:
+                try:
+                    tp.close()
+                except Exception:
+                    pass
+
+    # Should not reach here, but just in case
     return None
 
 
@@ -126,7 +168,7 @@ def process_single_trace(args: Tuple[Path, int, str]) -> Optional[TraceMetrics]:
 
 def load_traces_with_batches_parallel(
     base_dir: Path,
-    max_workers: Optional[int] = None,
+    max_workers: Optional[int] = 4,
     use_cache: bool = True
 ) -> pd.DataFrame:
     """
@@ -134,7 +176,7 @@ def load_traces_with_batches_parallel(
 
     Args:
         base_dir: Directory containing trace files
-        max_workers: Maximum number of parallel workers (default: CPU count)
+        max_workers: Maximum number of parallel workers (default: 4, conservative to avoid resource contention)
         use_cache: Whether to use cached metrics if available
 
     Returns:
@@ -185,7 +227,7 @@ def load_traces_with_batches_parallel(
 
     # Process traces in parallel
     metrics_list = []
-    failed_count = 0
+    failed_traces = []
 
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         # Submit all tasks
@@ -193,25 +235,30 @@ def load_traces_with_batches_parallel(
 
         # Collect results as they complete
         for future in as_completed(futures):
+            task = futures[future]
+            trace_path = task[0]  # First element of task tuple is trace_path
             try:
                 result = future.result()
                 if result is not None:
                     metrics_list.append(asdict(result))
                 else:
-                    failed_count += 1
+                    failed_traces.append(str(trace_path))
             except Exception:
-                failed_count += 1
+                failed_traces.append(str(trace_path))
 
     if not metrics_list:
         raise ValueError(
             f'No valid trace data loaded from {base_path}. '
-            f'{failed_count} traces failed processing. '
+            f'{len(failed_traces)} traces failed processing. '
             'Check that traces contain required slices: '
             'android_platform_page_load_complete, bindApplication, android_apps_tab_screen_render_begin'
         )
 
-    if failed_count > 0:
-        print(f"Warning: {failed_count} traces failed to process or had missing metrics")
+    if failed_traces:
+        print(f"\nWarning: {len(failed_traces)} traces failed to process or had missing metrics")
+        print("\nFailed trace files:")
+        for trace_path in sorted(failed_traces):
+            print(f"  - {trace_path}")
 
     print(f"✓ Successfully processed {len(metrics_list)} traces")
 
@@ -251,7 +298,7 @@ def clear_cache(directory: Path) -> bool:
 def process_base_and_test_traces(
     base_traces_dir: Path,
     test_traces_dir: Path,
-    max_workers: Optional[int] = None,
+    max_workers: Optional[int] = 4,
     use_cache: bool = True
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
@@ -260,7 +307,7 @@ def process_base_and_test_traces(
     Args:
         base_traces_dir: Directory containing base traces
         test_traces_dir: Directory containing test traces
-        max_workers: Maximum number of parallel workers per trace set
+        max_workers: Maximum number of parallel workers per trace set (default: 4, conservative to avoid resource contention)
         use_cache: Whether to use cached metrics if available
 
     Returns:

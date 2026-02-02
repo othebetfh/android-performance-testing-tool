@@ -29,7 +29,7 @@ test_execution:
 
   # Maximum number of iterations per batch
   # Larger iteration counts will be split into multiple batches
-  batch_size: 50
+  batch_size: 25
 
 # Analysis Configuration
 analysis:
