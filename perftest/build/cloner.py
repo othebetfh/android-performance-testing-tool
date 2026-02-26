@@ -53,28 +53,33 @@ def clone_repository(
     logger.debug(f"Target directory: {target_dir}")
 
     try:
-        # Clone repository (full clone, not shallow)
-        if branch:
-            # Clone specific branch
+        if commit:
+            # Fetch only the specific commit — avoids downloading full history
+            logger.info(f"Fetching commit: {commit}")
+            repo = Repo.init(target_dir)
+            repo.create_remote('origin', auth_url)
+            # Use repo.git.fetch() directly to avoid GitPython's FetchInfo
+            # parsing, which can block on bare commit SHA refspecs
+            repo.git.fetch('origin', commit, depth=1, no_progress=True)
+            repo.git.checkout('FETCH_HEAD')
+        elif branch:
+            # No specific commit: shallow clone of branch HEAD
             logger.info(f"Cloning branch: {branch}")
             repo = Repo.clone_from(
                 auth_url,
                 target_dir,
                 branch=branch,
-                single_branch=True  # Only clone the specific branch
+                single_branch=True,
+                depth=1
             )
         else:
-            # Clone default branch
+            # No branch or commit: shallow clone of default branch
             logger.info("Cloning default branch")
             repo = Repo.clone_from(
                 auth_url,
-                target_dir
+                target_dir,
+                depth=1
             )
-
-        # Checkout specific commit if provided
-        if commit:
-            logger.info(f"Checking out commit: {commit}")
-            repo.git.checkout(commit)
 
         # Log repository info
         try:
