@@ -63,6 +63,8 @@ run_in_container() {
         -e AWS_REGION \
         -e GITHUB_TOKEN \
         -e GITHUB_USER \
+        -e FINGERPRINT_WHITELISTED_VISITOR_ID \
+        -e FINGERPRINT_WHITELISTED_REQUEST_ID \
         "${image}" \
         "${command}"
 }
