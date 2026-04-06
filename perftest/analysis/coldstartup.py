@@ -6,6 +6,7 @@ This module executes analysis template notebooks and generates HTML reports.
 
 from pathlib import Path
 import re
+import json
 from bs4 import BeautifulSoup
 from .trace_processor import process_base_and_test_traces
 
@@ -265,7 +266,8 @@ def create_batch_aware_analysis(
         'base_name': base_name,
         'test_name': test_name,
         'device_pool': device_pool,
-        'test_type': test_name_str
+        'test_type': test_name_str,
+        'analysis_folder_path': str(analysis_folder.absolute()),
     }
 
     # Define functions for parallel execution
@@ -358,6 +360,40 @@ def create_batch_aware_analysis(
             except Exception as e:
                 print(f"✗ {notebook_name.capitalize()} failed: {e}")
                 raise
+
+    # Combine partial summaries into summary.json
+    batch_summary_path = analysis_folder / "batch_summary.json"
+    bootstrap_summary_path = analysis_folder / "bootstrap_summary.json"
+
+    with open(batch_summary_path) as f:
+        batch_summary = json.load(f)
+    with open(bootstrap_summary_path) as f:
+        bootstrap_summary = json.load(f)
+
+    summary = {
+        "run_name": folder_name,
+        "startup_latency_ms": {
+            "base_mean_ms": batch_summary["base_mean_ms"],
+            "test_mean_ms": batch_summary["test_mean_ms"],
+            "difference_ms": batch_summary["difference_ms"],
+            "pct_change": batch_summary["pct_change"],
+            "batch_aggregation": {
+                "p_value": batch_summary["p_value"]
+            },
+            "blocked_bootstrap": {
+                "ci_lower": bootstrap_summary["ci_lower"],
+                "ci_upper": bootstrap_summary["ci_upper"],
+                "p_value": bootstrap_summary["p_value"]
+            }
+        }
+    }
+
+    with open(analysis_folder / "summary.json", "w") as f:
+        json.dump(summary, f, indent=2)
+
+    batch_summary_path.unlink()
+    bootstrap_summary_path.unlink()
+    print(f"✓ summary.json written")
 
     # Combine both reports into a single HTML with tabs
     print(f"Combining reports into tabbed HTML...")
