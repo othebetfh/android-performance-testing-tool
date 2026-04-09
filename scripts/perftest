@@ -49,10 +49,12 @@ if [ -z "$COMMAND" ]; then
     echo "Usage: ./scripts/perftest <command> [options]"
     echo ""
     echo "Available commands:"
-    echo "  build-apk           Build APK from source"
-    echo "  upload-and-test     Upload APK and run tests"
-    echo "  analyze             Analyze performance results"
-    echo "  full-pipeline       Run complete pipeline"
+    echo "  build-apk                Build APK from source"
+    echo "  upload-and-test          Upload APK and run tests"
+    echo "  analyze                  Analyze performance results"
+    echo "  full-pipeline            Run complete performance pipeline (build → test → analyze)"
+    echo "  generate-baseline-profile  Generate a baseline profile (requires prior build-apk)"
+    echo "  full-baseline-pipeline   Run complete baseline pipeline (build → generate)"
     echo ""
     echo "For interactive mode, use:"
     echo "  ./scripts/perftest-interactive"
@@ -61,12 +63,12 @@ if [ -z "$COMMAND" ]; then
 fi
 
 case "${COMMAND}" in
-    build-apk|build)
+    build-apk|build|full-baseline-pipeline)
         # APK building always requires AMD64 for AAPT2
         IMAGE_TAG="amd64"
         PLATFORM_NOTE="(using amd64 for APK building)"
         ;;
-    analyze|upload-and-test|full-pipeline)
+    analyze|upload-and-test|full-pipeline|generate-baseline-profile)
         # Use host-appropriate platform
         IMAGE_TAG="${DEFAULT_PLATFORM}"
         PLATFORM_NOTE="(using ${DEFAULT_PLATFORM} based on host architecture)"
