@@ -251,7 +251,7 @@ def build_apk_interactive():
 
     branch = Prompt.ask("Git branch name")
     commit = Prompt.ask("Git commit hash")
-    flavor = Prompt.ask("Product flavor", default="dev")
+    flavor = Prompt.ask("Product flavor", default="staging")
     build_type = Prompt.ask("Build type", default="perf")
 
     console.print("\n[green]Building APK...[/green]\n")
@@ -478,7 +478,7 @@ def full_pipeline_interactive():
     project_arn = Prompt.ask("AWS Device Farm project ARN")
     device_pool_arn = Prompt.ask("AWS Device Farm device pool ARN")
     test_name = Prompt.ask("Test name from benchmark_tests.yml")
-    flavor = Prompt.ask("Product flavor", default="dev")
+    flavor = Prompt.ask("Product flavor", default="staging")
     build_type = Prompt.ask("Build type", default="perf")
     run_name = Prompt.ask("Optional test run name", default="")
     num_iterations = IntPrompt.ask("Number of test iterations")
@@ -619,7 +619,7 @@ def full_baseline_pipeline_interactive():
     commit = Prompt.ask("Git commit hash")
     project_arn = Prompt.ask("AWS Device Farm project ARN")
     device_pool_arn = Prompt.ask("AWS Device Farm device pool ARN")
-    flavor = Prompt.ask("Product flavor", default="dev")
+    flavor = Prompt.ask("Product flavor", default="staging")
     build_type = Prompt.ask("Build type", default="perf")
     run_name = Prompt.ask("Optional run name", default="")
 

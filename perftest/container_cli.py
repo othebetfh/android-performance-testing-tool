@@ -38,7 +38,7 @@ def main():
     )
     build_parser.add_argument('--branch', required=True, help='Git branch name')
     build_parser.add_argument('--commit', required=True, help='Git commit hash')
-    build_parser.add_argument('--product-flavor', default='dev', help='Product flavor (default: dev)')
+    build_parser.add_argument('--product-flavor', default='staging', help='Product flavor (default: staging)')
     build_parser.add_argument('--build-type', default='perf', help='Build type (default: perf)')
 
     # upload-and-test command
@@ -78,7 +78,7 @@ def main():
     pipeline_parser.add_argument('--project-arn', required=True, help='AWS Device Farm project ARN')
     pipeline_parser.add_argument('--device-pool-arn', required=True, help='AWS Device Farm device pool ARN')
     pipeline_parser.add_argument('--test-name', required=True, help='Test name from benchmark_tests.yml')
-    pipeline_parser.add_argument('--product-flavor', default='dev', help='Product flavor (default: dev)')
+    pipeline_parser.add_argument('--product-flavor', default='staging', help='Product flavor (default: staging)')
     pipeline_parser.add_argument('--build-type', default='perf', help='Build type (default: perf)')
     pipeline_parser.add_argument('--run-name', help='Optional test run name')
     pipeline_parser.add_argument('--num-iterations', type=int, required=True, help='Number of test iterations')
@@ -103,7 +103,7 @@ def main():
     full_baseline_parser.add_argument('--commit', required=True, help='Git commit hash')
     full_baseline_parser.add_argument('--project-arn', required=True, help='AWS Device Farm project ARN')
     full_baseline_parser.add_argument('--device-pool-arn', required=True, help='AWS Device Farm device pool ARN')
-    full_baseline_parser.add_argument('--product-flavor', default='dev', help='Product flavor (default: dev)')
+    full_baseline_parser.add_argument('--product-flavor', default='staging', help='Product flavor (default: staging)')
     full_baseline_parser.add_argument('--build-type', default='perf', help='Build type (default: perf)')
     full_baseline_parser.add_argument('--run-name', help='Optional test run name')
 

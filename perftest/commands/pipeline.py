@@ -398,7 +398,7 @@ def non_interactive_upload_and_test(
 def non_interactive_build(
     branch: str,
     commit: str,
-    product_flavor: str = "dev",
+    product_flavor: str = "staging",
     build_type: str = "perf"
 ):
     """
@@ -470,7 +470,7 @@ def non_interactive_full_pipeline(
     project_arn: str,
     device_pool_arn: str,
     test_name: str,
-    product_flavor: str = "dev",
+    product_flavor: str = "staging",
     build_type: str = "perf",
     run_name: Optional[str] = None,
     num_iterations: int = 150
@@ -804,7 +804,7 @@ def non_interactive_full_baseline_pipeline(
     commit: str,
     project_arn: str,
     device_pool_arn: str,
-    product_flavor: str = "dev",
+    product_flavor: str = "staging",
     build_type: str = "perf",
     run_name: Optional[str] = None,
 ):
