@@ -619,7 +619,7 @@ def non_interactive_generate_baseline_profile(
     """
     Generate a baseline profile for the given branch/commit.
 
-    Uploads the devPerf APKs to Device Farm, runs the BaselineProfileGenerator,
+    Uploads the APKs to Device Farm, runs the BaselineProfileGenerator,
     and downloads the resulting baseline-prof.txt to the output directory.
 
     Args:
@@ -702,7 +702,7 @@ def non_interactive_generate_baseline_profile(
     console.print(f"  Build: {build_output_dir.name}")
     console.print(f"  App APK: {app_apk_path.name}")
     console.print(f"  Test APK: {test_apk_path.name}")
-    console.print(f"  Generator: {generator['full_name']}")
+    console.print(f"  Generator: {generator['class']}")
     console.print(f"  Device Pool: {device_pool}")
 
     # Upload APKs
@@ -753,7 +753,7 @@ def non_interactive_generate_baseline_profile(
         app_arn=app_arn,
         test_package_arn=test_package_arn,
         test_spec_arn=test_spec_arn,
-        test_class=generator['full_name'],
+        test_class=generator['class'],
         run_name=run_name,
     )
 
@@ -788,7 +788,8 @@ def non_interactive_generate_baseline_profile(
     merged_path = profiles_dir / "baseline-prof.txt"
     merge_baseline_profiles(downloaded, merged_path)
 
-    merged_lines = sum(1 for _ in open(merged_path))
+    with open(merged_path) as f:
+        merged_lines = sum(1 for _ in f)
     console.print(f"  [green]✓[/green] {merged_lines} unique entries → {get_display_path(merged_path)}")
 
     console.print(f"\n[bold green]Baseline profile generated successfully![/bold green]")
