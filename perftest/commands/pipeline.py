@@ -607,3 +607,259 @@ def non_interactive_full_pipeline(
     console.print(f"  ✓ Built test version: {test_branch} @ {test_commit[:8]}")
     console.print(f"  ✓ Tested both versions on Device Farm")
     console.print(f"  ✓ Generated comparison notebook")
+
+
+def non_interactive_generate_baseline_profile(
+    branch: str,
+    commit: str,
+    project_arn: str,
+    device_pool_arn: str,
+    run_name: Optional[str] = None,
+):
+    """
+    Generate a baseline profile for the given branch/commit.
+
+    Uploads the devPerf APKs to Device Farm, runs the BaselineProfileGenerator,
+    and downloads the resulting baseline-prof.txt to the output directory.
+
+    Args:
+        branch: Git branch name
+        commit: Git commit hash
+        project_arn: AWS Device Farm project ARN
+        device_pool_arn: AWS Device Farm device pool ARN
+        run_name: Optional test run name
+    """
+    from datetime import datetime
+    from .devicefarm import (
+        upload_apk,
+        schedule_test_run,
+        monitor_test_run,
+        get_available_generators,
+        download_baseline_profile,
+    )
+
+    console.print("\n[bold blue]Generate baseline profile[/bold blue]")
+    console.print("─" * 50)
+
+    branch_sanitized = branch.replace('/', '-').replace('\\', '-')
+    commit_short = commit[:8] if len(commit) >= 8 else commit
+    build_output_dir = Path(f"/workspace/output/{branch_sanitized}_{commit_short}")
+
+    if not build_output_dir.exists():
+        console.print(f"[red]Error: Build not found at {build_output_dir}[/red]")
+        console.print(f"[yellow]Please run build-apk first for branch '{branch}' and commit '{commit}'[/yellow]")
+        sys.exit(1)
+
+    apk_dir = build_output_dir / "apks"
+    if not apk_dir.exists():
+        console.print(f"[red]Error: APKs directory not found at {apk_dir}[/red]")
+        sys.exit(1)
+
+    apk_files = list(apk_dir.glob("*.apk"))
+    app_apks = [f for f in apk_files if f.name.startswith("app-")]
+    test_apks = [f for f in apk_files if not f.name.startswith("app-")]
+
+    if not app_apks:
+        console.print(f"[red]Error: App APK not found in {apk_dir}[/red]")
+        sys.exit(1)
+
+    if not test_apks:
+        console.print(f"[red]Error: Test APK not found in {apk_dir}[/red]")
+        sys.exit(1)
+
+    app_apk_path = app_apks[0]
+    test_apk_path = test_apks[0]
+
+    # Load generators from config
+    generators = get_available_generators()
+    if not generators:
+        console.print("[red]Error: No baseline generators found in benchmark_tests.yml[/red]")
+        sys.exit(1)
+
+    # Use the first generator (only one expected for now)
+    generator = generators[0]
+
+    # Get device pool name for output directory
+    try:
+        session_kwargs = {
+            'aws_access_key_id': os.environ.get('AWS_ACCESS_KEY_ID'),
+            'aws_secret_access_key': os.environ.get('AWS_SECRET_ACCESS_KEY'),
+            'region_name': os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
+        }
+        session_token = os.environ.get('AWS_SESSION_TOKEN')
+        if session_token:
+            session_kwargs['aws_session_token'] = session_token
+
+        session = boto3.Session(**session_kwargs)
+        devicefarm = session.client('devicefarm')
+        pool_response = devicefarm.get_device_pool(arn=device_pool_arn)
+        device_pool = pool_response['devicePool']['name']
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not fetch device pool name: {e}[/yellow]")
+        device_pool = device_pool_arn.split('/')[-1] if '/' in device_pool_arn else device_pool_arn
+
+    console.print(f"\n[bold]Configuration:[/bold]")
+    console.print(f"  Build: {build_output_dir.name}")
+    console.print(f"  App APK: {app_apk_path.name}")
+    console.print(f"  Test APK: {test_apk_path.name}")
+    console.print(f"  Generator: {generator['full_name']}")
+    console.print(f"  Device Pool: {device_pool}")
+
+    # Upload APKs
+    console.print(f"\n[bold]Uploading APKs...[/bold]")
+
+    app_arn = upload_apk(project_arn, str(app_apk_path), 'ANDROID_APP')
+    if not app_arn:
+        console.print("[red]Failed to upload app APK[/red]")
+        sys.exit(1)
+
+    test_package_arn = upload_apk(project_arn, str(test_apk_path), 'INSTRUMENTATION_TEST_PACKAGE')
+    if not test_package_arn:
+        console.print("[red]Failed to upload test APK[/red]")
+        sys.exit(1)
+
+    # Build and upload test spec
+    template_path = Path("/workspace/config/baseline_profile_spec.yml.template")
+    if not template_path.exists():
+        console.print(f"[red]Baseline profile test spec template not found: {template_path}[/red]")
+        sys.exit(1)
+
+    with open(template_path, 'r') as f:
+        template_content = f.read()
+
+    test_selector = f"-e class {generator['class']}"
+    spec_contents = template_content.replace("{{TEST_SELECTOR}}", test_selector)
+    test_spec_path = Path(f"/tmp/{branch_sanitized}_{commit_short}_baseline_profile_testspec.yml")
+
+    with open(test_spec_path, 'w') as f:
+        f.write(spec_contents)
+
+    console.print(f"\n[bold]Uploading test spec...[/bold]")
+    test_spec_arn = upload_apk(project_arn, str(test_spec_path), 'INSTRUMENTATION_TEST_SPEC')
+    test_spec_path.unlink(missing_ok=True)
+
+    if not test_spec_arn:
+        console.print("[red]Failed to upload test spec[/red]")
+        sys.exit(1)
+
+    # Schedule run
+    if not run_name:
+        run_name = f"Baseline Profile - {branch_sanitized}_{commit_short} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+
+    console.print(f"\n[bold]Scheduling baseline profile run...[/bold]")
+    run_arn = schedule_test_run(
+        project_arn=project_arn,
+        device_pool_arn=device_pool_arn,
+        app_arn=app_arn,
+        test_package_arn=test_package_arn,
+        test_spec_arn=test_spec_arn,
+        test_class=generator['full_name'],
+        run_name=run_name,
+    )
+
+    if not run_arn:
+        console.print("[red]Failed to schedule baseline profile run[/red]")
+        sys.exit(1)
+
+    # Monitor run
+    run_result = monitor_test_run(run_arn)
+
+    if not run_result:
+        console.print("\n[red]Baseline profile run did not complete[/red]")
+        sys.exit(1)
+
+    if run_result.get('result') not in ('PASSED', 'WARNED'):
+        console.print(f"\n[red]Baseline profile run failed with result: {run_result.get('result')}[/red]")
+        sys.exit(1)
+
+    # Download raw profile files
+    profiles_dir = build_output_dir / "baseline_profiles" / device_pool
+    console.print(f"\n[bold]Downloading baseline profile files...[/bold]")
+    downloaded = download_baseline_profile(run_arn, profiles_dir)
+
+    if not downloaded:
+        console.print("\n[red]No baseline profile files were downloaded[/red]")
+        sys.exit(1)
+
+    # Merge into a single deduplicated baseline-prof.txt
+    from perftest.analysis.baseline_profile import merge_baseline_profiles
+
+    console.print(f"\n[bold]Merging {len(downloaded)} profile file(s)...[/bold]")
+    merged_path = profiles_dir / "baseline-prof.txt"
+    merge_baseline_profiles(downloaded, merged_path)
+
+    merged_lines = sum(1 for _ in open(merged_path))
+    console.print(f"  [green]✓[/green] {merged_lines} unique entries → {get_display_path(merged_path)}")
+
+    console.print(f"\n[bold green]Baseline profile generated successfully![/bold green]")
+    console.print(f"\n[bold]Merged profile:[/bold]")
+    console.print(f"  {get_display_path(merged_path)}")
+    console.print(f"\n[bold]Raw profiles:[/bold]")
+    for f in downloaded:
+        console.print(f"  {get_display_path(f)}")
+
+
+def non_interactive_full_baseline_pipeline(
+    branch: str,
+    commit: str,
+    project_arn: str,
+    device_pool_arn: str,
+    product_flavor: str = "dev",
+    build_type: str = "perf",
+    run_name: Optional[str] = None,
+):
+    """
+    Full baseline pipeline: build APK then generate baseline profile.
+
+    Args:
+        branch: Git branch name
+        commit: Git commit hash
+        project_arn: AWS Device Farm project ARN
+        device_pool_arn: AWS Device Farm device pool ARN
+        product_flavor: Product flavor (default: dev)
+        build_type: Build type (default: perf)
+        run_name: Optional test run name
+    """
+    console.print("\n[bold blue]Full baseline pipeline[/bold blue]")
+    console.print("─" * 50)
+
+    console.print(f"\n[bold]Configuration:[/bold]")
+    console.print(f"  Branch: {branch} @ {commit[:8]}")
+    console.print(f"  Product Flavor: {product_flavor}")
+    console.print(f"  Build Type: {build_type}")
+
+    console.print("\n" + "=" * 60)
+    console.print("[bold cyan]Step 1/2: Building APK[/bold cyan]")
+    console.print("=" * 60)
+
+    try:
+        non_interactive_build(
+            branch=branch,
+            commit=commit,
+            product_flavor=product_flavor,
+            build_type=build_type,
+        )
+    except SystemExit:
+        console.print("[red]Build failed[/red]")
+        sys.exit(1)
+
+    console.print("\n" + "=" * 60)
+    console.print("[bold cyan]Step 2/2: Generating baseline profile[/bold cyan]")
+    console.print("=" * 60)
+
+    try:
+        non_interactive_generate_baseline_profile(
+            branch=branch,
+            commit=commit,
+            project_arn=project_arn,
+            device_pool_arn=device_pool_arn,
+            run_name=run_name,
+        )
+    except SystemExit:
+        console.print("[red]Baseline profile generation failed[/red]")
+        sys.exit(1)
+
+    console.print("\n[bold green]Full baseline pipeline completed successfully![/bold green]")
+    console.print("\n[bold]Summary:[/bold]")
+    console.print(f"  ✓ Built {product_flavor}{build_type.capitalize()} APK: {branch} @ {commit[:8]}")
+    console.print(f"  ✓ Generated baseline profile on Device Farm")

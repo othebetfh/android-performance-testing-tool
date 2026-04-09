@@ -20,10 +20,12 @@ from .devicefarm import (
     upload_apk,
     load_test_execution_config,
     get_available_tests,
+    get_available_generators,
     schedule_test_run,
     monitor_test_run,
     monitor_runs_parallel_with_retry,
-    download_artifacts
+    download_artifacts,
+    download_baseline_profile,
 )
 
 # Import build functions
@@ -42,7 +44,9 @@ from .pipeline import (
     non_interactive_analyze,
     non_interactive_upload_and_test,
     non_interactive_build,
-    non_interactive_full_pipeline
+    non_interactive_full_pipeline,
+    non_interactive_generate_baseline_profile,
+    non_interactive_full_baseline_pipeline,
 )
 
 __all__ = [
@@ -62,10 +66,12 @@ __all__ = [
     'upload_apk',
     'load_test_execution_config',
     'get_available_tests',
+    'get_available_generators',
     'schedule_test_run',
     'monitor_test_run',
     'monitor_runs_parallel_with_retry',
     'download_artifacts',
+    'download_baseline_profile',
     # Build
     'build_apk_for_pipeline',
     # Test
@@ -76,5 +82,7 @@ __all__ = [
     'non_interactive_analyze',
     'non_interactive_upload_and_test',
     'non_interactive_build',
-    'non_interactive_full_pipeline'
+    'non_interactive_full_pipeline',
+    'non_interactive_generate_baseline_profile',
+    'non_interactive_full_baseline_pipeline',
 ]

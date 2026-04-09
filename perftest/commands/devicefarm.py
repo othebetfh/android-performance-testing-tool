@@ -229,6 +229,35 @@ def get_available_tests() -> list[dict]:
         return []
 
 
+def get_available_generators() -> list[dict]:
+    """
+    Get list of available baseline profile generators from config.
+
+    Returns:
+        List of generators with 'class' and 'description' keys
+    """
+    tests_config_path = Path("/workspace/config/benchmark_tests.yml")
+
+    if not tests_config_path.exists():
+        console.print(f"[yellow]Warning: Tests config not found at {tests_config_path}[/yellow]")
+        return []
+
+    try:
+        with open(tests_config_path, 'r') as f:
+            config = yaml.safe_load(f)
+
+        return [
+            {
+                'class': entry['class'],
+                'description': entry.get('description', '')
+            }
+            for entry in config.get('baseline_generators', [])
+        ]
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not read generators config: {e}[/yellow]")
+        return []
+
+
 def schedule_test_run(
     project_arn: str,
     device_pool_arn: str,
@@ -756,4 +785,98 @@ def download_artifacts(run_arn: str, output_dir: Path) -> list[Path]:
                 run_output_dir.rmdir()
         except:
             pass
+        return []
+
+
+def download_baseline_profile(run_arn: str, output_dir: Path) -> list[Path]:
+    """
+    Download baseline profile artifact from a completed test run.
+
+    Looks for *baseline-prof.txt files inside the customer artifacts zip,
+    which are written to $DEVICEFARM_LOG_DIR/baseline_output/ by the test spec.
+
+    Args:
+        run_arn: Test run ARN
+        output_dir: Directory to save the profile file(s)
+
+    Returns:
+        List of downloaded file paths
+    """
+    try:
+        session_kwargs = {
+            'aws_access_key_id': os.environ.get('AWS_ACCESS_KEY_ID'),
+            'aws_secret_access_key': os.environ.get('AWS_SECRET_ACCESS_KEY'),
+            'region_name': 'us-west-2'
+        }
+        session_token = os.environ.get('AWS_SESSION_TOKEN')
+        if session_token:
+            session_kwargs['aws_session_token'] = session_token
+
+        session = boto3.Session(**session_kwargs)
+        client = session.client('devicefarm')
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        downloaded_files = []
+
+        jobs_response = client.list_jobs(arn=run_arn)
+        jobs = jobs_response.get('jobs', [])
+
+        for job in jobs:
+            job_arn = job['arn']
+
+            try:
+                job_artifacts_response = client.list_artifacts(
+                    arn=job_arn,
+                    type='FILE'
+                )
+                job_artifacts = job_artifacts_response.get('artifacts', [])
+
+                console.print(f"  Found {len(job_artifacts)} job-level artifact(s)")
+
+                for artifact in job_artifacts:
+                    artifact_type = artifact.get('type', '')
+                    artifact_extension = artifact.get('extension', '')
+                    artifact_url = artifact.get('url', '')
+                    artifact_name = artifact.get('name', '')
+
+                    if artifact_type == 'CUSTOMER_ARTIFACT' and artifact_extension == 'zip':
+                        console.print(f"  Downloading and extracting: {artifact_name}")
+
+                        response = requests.get(artifact_url)
+                        response.raise_for_status()
+
+                        import zipfile
+                        import tempfile
+                        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_zip:
+                            temp_zip.write(response.content)
+                            temp_zip_path = temp_zip.name
+
+                        try:
+                            with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
+                                for zip_info in zip_ref.namelist():
+                                    if zip_info.endswith('-prof.txt'):
+                                        console.print(f"    Found baseline profile: {zip_info}")
+
+                                        profile_data = zip_ref.read(zip_info)
+                                        output_file = output_dir / Path(zip_info).name
+                                        with open(output_file, 'wb') as f:
+                                            f.write(profile_data)
+
+                                        downloaded_files.append(output_file)
+                                        console.print(f"    [green]✓[/green] Extracted: {output_file}")
+                        finally:
+                            Path(temp_zip_path).unlink(missing_ok=True)
+
+            except Exception as e:
+                console.print(f"[yellow]Warning: Could not process job artifacts: {e}[/yellow]")
+
+        if downloaded_files:
+            console.print(f"\n[green]✓[/green] Downloaded {len(downloaded_files)} baseline profile file(s)")
+        else:
+            console.print(f"\n[yellow]No baseline profile files found[/yellow]")
+
+        return downloaded_files
+
+    except Exception as e:
+        console.print(f"\n[red]Error downloading baseline profile: {e}[/red]")
         return []

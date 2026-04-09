@@ -32,8 +32,10 @@ show_menu() {
     echo "1) Build APK from source"
     echo "2) Run performance test on Device Farm"
     echo "3) Analyze performance test runs"
-    echo "4) Full pipeline (build → test → analyze)"
-    echo "5) Exit"
+    echo "4) Generate baseline profile"
+    echo "5) Full performance pipeline (build → test → analyze)"
+    echo "6) Full baseline pipeline (build → generate)"
+    echo "7) Exit"
     echo ""
 }
 
@@ -106,15 +108,23 @@ while true; do
             run_in_container "analyze-interactive" "${DEFAULT_PLATFORM}"
             ;;
         4)
-            # Full pipeline - use host-appropriate platform
-            run_in_container "full-pipeline-interactive" "${DEFAULT_PLATFORM}"
+            # Generate baseline profile - use host-appropriate platform
+            run_in_container "generate-baseline-profile-interactive" "${DEFAULT_PLATFORM}"
             ;;
         5)
+            # Full performance pipeline - use host-appropriate platform
+            run_in_container "full-pipeline-interactive" "${DEFAULT_PLATFORM}"
+            ;;
+        6)
+            # Full baseline pipeline - always requires AMD64 (build step)
+            run_in_container "full-baseline-pipeline-interactive" "amd64"
+            ;;
+        7)
             echo "Exiting..."
             exit 0
             ;;
         *)
-            echo -e "${RED}Invalid choice. Please select 1-5.${NC}"
+            echo -e "${RED}Invalid choice. Please select 1-7.${NC}"
             sleep 2
             continue
             ;;

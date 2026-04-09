@@ -15,7 +15,9 @@ from perftest.commands import (
     non_interactive_build,
     non_interactive_upload_and_test,
     non_interactive_analyze,
-    non_interactive_full_pipeline
+    non_interactive_full_pipeline,
+    non_interactive_generate_baseline_profile,
+    non_interactive_full_baseline_pipeline,
 )
 
 console = Console()
@@ -503,9 +505,147 @@ def full_pipeline_interactive():
     )
 
 
+def generate_baseline_profile_interactive():
+    """Interactive workflow for generating a baseline profile."""
+    console.print("\n[cyan]Generate baseline profile[/cyan]\n")
+
+    # Try to show cached builds
+    console.print("[yellow]Checking for cached builds...[/yellow]")
+    selected_build = select_cached_build()
+
+    if selected_build:
+        branch = selected_build['branch']
+        commit = selected_build['commit']
+        console.print(f"\n[green]✓ Using build:[/green] {selected_build['build']['name']}")
+        console.print(f"  Branch: {branch}")
+        console.print(f"  Commit: {commit}\n")
+    else:
+        console.print("\n[yellow]No cached build selected. Enter details manually:[/yellow]\n")
+        branch = Prompt.ask("Git branch name")
+        commit = Prompt.ask("Git commit hash")
+
+    from perftest.commands.devicefarm import get_projects, get_device_pools
+
+    console.print("\n[yellow]Fetching AWS Device Farm projects...[/yellow]")
+    projects = get_projects()
+
+    project_arn = None
+    if projects:
+        console.print("\n[cyan]Available Projects:[/cyan]\n")
+
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("#", style="dim", width=4)
+        table.add_column("Project Name", style="cyan")
+
+        for idx, project in enumerate(projects, 1):
+            table.add_row(str(idx), project['name'])
+
+        console.print(table)
+        console.print()
+
+        choice = IntPrompt.ask(
+            "Select project number (0 to enter ARN manually)",
+            default=0
+        )
+
+        if choice > 0 and choice <= len(projects):
+            project_arn = projects[choice - 1]['arn']
+            console.print(f"\n[green]✓ Selected project:[/green] {projects[choice - 1]['name']}\n")
+
+    if not project_arn:
+        project_arn = Prompt.ask("AWS Device Farm project ARN")
+
+    console.print("[yellow]Fetching device pools...[/yellow]")
+    device_pools = get_device_pools(project_arn)
+
+    device_pool_arn = None
+    if device_pools:
+        console.print("\n[cyan]Available Device Pools:[/cyan]\n")
+
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("#", style="dim", width=4)
+        table.add_column("Device Pool Name", style="green")
+        table.add_column("Type", style="yellow")
+
+        for idx, pool in enumerate(device_pools, 1):
+            table.add_row(str(idx), pool['name'], pool.get('type', 'PRIVATE'))
+
+        console.print(table)
+        console.print()
+
+        choice = IntPrompt.ask(
+            "Select device pool number (0 to enter ARN manually)",
+            default=0
+        )
+
+        if choice > 0 and choice <= len(device_pools):
+            device_pool_arn = device_pools[choice - 1]['arn']
+            console.print(f"\n[green]✓ Selected device pool:[/green] {device_pools[choice - 1]['name']}\n")
+
+    if not device_pool_arn:
+        device_pool_arn = Prompt.ask("AWS Device Farm device pool ARN")
+
+    run_name = Prompt.ask("Optional run name", default="")
+
+    console.print("\n[green]Generating baseline profile...[/green]\n")
+
+    non_interactive_generate_baseline_profile(
+        branch=branch,
+        commit=commit,
+        project_arn=project_arn,
+        device_pool_arn=device_pool_arn,
+        run_name=run_name if run_name else None,
+    )
+
+
+def full_baseline_pipeline_interactive():
+    """Interactive workflow for the full baseline pipeline (build → generate)."""
+    import platform
+
+    host_arch = platform.machine()
+    if host_arch not in ["x86_64", "AMD64"]:
+        console.print("\n[red]Full Baseline Pipeline - x86_64 Only[/red]\n")
+        console.print(f"[yellow]The full baseline pipeline only works on x86_64 architecture.[/yellow]")
+        console.print(f"[yellow]Current architecture: {host_arch}[/yellow]\n")
+        console.print("[yellow]On ARM64 (Apple Silicon), please run the steps separately:[/yellow]")
+        console.print("[yellow]  1. Build APK[/yellow]")
+        console.print("[yellow]  4. Generate baseline profile[/yellow]\n")
+        Prompt.ask("Press Enter to return to menu")
+        return
+
+    console.print("\n[cyan]Full baseline pipeline (build → generate)[/cyan]\n")
+
+    branch = Prompt.ask("Git branch name")
+    commit = Prompt.ask("Git commit hash")
+    project_arn = Prompt.ask("AWS Device Farm project ARN")
+    device_pool_arn = Prompt.ask("AWS Device Farm device pool ARN")
+    flavor = Prompt.ask("Product flavor", default="dev")
+    build_type = Prompt.ask("Build type", default="perf")
+    run_name = Prompt.ask("Optional run name", default="")
+
+    console.print()
+    if not Confirm.ask("Continue with full baseline pipeline?"):
+        console.print("[yellow]Cancelled[/yellow]")
+        return
+
+    console.print("\n[green]Running full baseline pipeline...[/green]\n")
+
+    non_interactive_full_baseline_pipeline(
+        branch=branch,
+        commit=commit,
+        project_arn=project_arn,
+        device_pool_arn=device_pool_arn,
+        product_flavor=flavor,
+        build_type=build_type,
+        run_name=run_name if run_name else None,
+    )
+
+
 # Note: Main menu is now handled by scripts/perftest-interactive (bash)
 # Each function above is called directly as a separate command:
 #   - build-interactive
 #   - test-interactive
 #   - analyze-interactive
 #   - full-pipeline-interactive
+#   - generate-baseline-profile-interactive
+#   - full-baseline-pipeline-interactive

@@ -1,0 +1,56 @@
+version: 0.1
+
+android_test_host: amazon_linux_2
+ios_test_host: macos_sequoia
+
+phases:
+  install:
+    commands:
+      - devicefarm-cli use python 3.11
+      - python --version
+
+  pre_test:
+    commands:
+      - OUTPUT_FILE="/tmp/baseline_gen_results.log"
+
+  test:
+    commands:
+      - |
+        adb wait-for-device
+
+        until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+        echo "Waiting for sys.boot_completed..."
+        sleep 2
+        done
+
+        echo "Device booted. Checking packages..."
+        adb shell pm list packages | grep -F com.worldcoin || (echo "App missing"; exit 1)
+        adb shell pm list instrumentation | grep -F com.worldcoin.benchmark || (echo "Instrumentation missing"; exit 1)
+
+        sleep 30
+        echo "Running baseline profile generator..."
+        adb shell am instrument -w \
+          {{TEST_SELECTOR}} \
+          com.worldcoin.benchmark/androidx.test.runner.AndroidJUnitRunner | tee $OUTPUT_FILE
+
+  post_test:
+    commands:
+      - cp $OUTPUT_FILE $DEVICEFARM_LOG_DIR
+      - |
+        BENCHMARK_MEDIA_DIR="/storage/emulated/0/Android/media/com.worldcoin.benchmark"
+        FOUND=0
+        for PROFILE_FILE in $(adb shell find "$BENCHMARK_MEDIA_DIR" -name "*-prof.txt" ! -name "*-prof-20*.txt" 2>/dev/null | tr -d '\r'); do
+          BASENAME=$(basename "$PROFILE_FILE")
+          echo "Pulling: $BASENAME"
+          adb pull "$PROFILE_FILE" "$DEVICEFARM_LOG_DIR/$BASENAME"
+          FOUND=1
+        done
+        if [ "$FOUND" = "0" ]; then
+          echo "No baseline profile files found in $BENCHMARK_MEDIA_DIR"
+          adb shell ls -lR "$BENCHMARK_MEDIA_DIR" 2>/dev/null || true
+          exit 1
+        fi
+
+
+artifacts:
+  - $DEVICEFARM_LOG_DIR

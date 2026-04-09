@@ -12,3 +12,7 @@ test_classes:
 #        description: Hot startup performance test
 #      - name: coldStartupToAppTabNavigation
 #        description: Cold startup to app tab navigation test
+
+baseline_generators:
+  - class: com.worldcoin.benchmark.BaselineProfileGenerator
+    description: Generate baseline profile for app startup
