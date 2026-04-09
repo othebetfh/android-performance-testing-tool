@@ -24,7 +24,7 @@ phases:
         done
 
         echo "Device booted. Checking packages..."
-        adb shell pm list packages | grep -F com.worldcoin.dev || (echo "App missing"; exit 1)
+        adb shell pm list packages | grep -F com.worldcoin || (echo "App missing"; exit 1)
         adb shell pm list instrumentation | grep -F com.worldcoin.benchmark || (echo "Instrumentation missing"; exit 1)
 
         sleep 30
