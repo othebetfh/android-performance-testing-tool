@@ -209,6 +209,7 @@ class GradleBuilder:
             gradle_options = [
                 '--no-daemon',
                 '--stacktrace',
+                '-x', 'lintVital',
             ]
 
         # Build app APK
