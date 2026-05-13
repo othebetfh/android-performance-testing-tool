@@ -22,7 +22,8 @@ class GradleBuilder:
         properties_file: Optional[Path] = None,
         google_services_file: Optional[Path] = None,
         github_user: Optional[str] = None,
-        github_token: Optional[str] = None
+        github_token: Optional[str] = None,
+        enable_shield: bool = False
     ):
         """
         Initialize Gradle builder.
@@ -43,6 +44,7 @@ class GradleBuilder:
         self.google_services_file = google_services_file
         self.github_user = github_user
         self.github_token = github_token
+        self.enable_shield = enable_shield
 
         # Validate project directory
         if not self.project_dir.exists():
@@ -257,6 +259,10 @@ class GradleBuilder:
             env['GITHUB_USER'] = self.github_user
         if self.github_token:
             env['GITHUB_TOKEN'] = self.github_token
+
+        # Enable Promon Shield if requested
+        if self.enable_shield:
+            env['ENABLE_SHIELD'] = 'true'
 
         # Build command
         cmd = [str(self.gradlew)] + tasks

@@ -21,7 +21,8 @@ def build_apk_for_pipeline(
     commit: str,
     github_token: str,
     product_flavor: str = "dev",
-    build_type: str = "perf"
+    build_type: str = "perf",
+    enable_shield: bool = False
 ) -> Optional[Path]:
     """
     Build APK for pipeline use.
@@ -111,7 +112,8 @@ def build_apk_for_pipeline(
                 properties_file=properties_file,
                 google_services_file=google_services_file,
                 github_user=github_user,
-                github_token=github_token
+                github_token=github_token,
+                enable_shield=enable_shield
             )
             apks = builder.build(
                 product_flavor=product_flavor,

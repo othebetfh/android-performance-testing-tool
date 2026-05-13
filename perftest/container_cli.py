@@ -40,6 +40,7 @@ def main():
     build_parser.add_argument('--commit', required=True, help='Git commit hash')
     build_parser.add_argument('--product-flavor', default='staging', help='Product flavor (default: staging)')
     build_parser.add_argument('--build-type', default='perf', help='Build type (default: perf)')
+    build_parser.add_argument('--promon-shield', action='store_true', help='Enable Promon Shield (sets ENABLE_SHIELD=true)')
 
     # upload-and-test command
     upload_parser = subparsers.add_parser(
@@ -82,6 +83,7 @@ def main():
     pipeline_parser.add_argument('--build-type', default='perf', help='Build type (default: perf)')
     pipeline_parser.add_argument('--run-name', help='Optional test run name')
     pipeline_parser.add_argument('--num-iterations', type=int, required=True, help='Number of test iterations')
+    pipeline_parser.add_argument('--promon-shield', action='store_true', help='Enable Promon Shield (sets ENABLE_SHIELD=true)')
 
     # generate-baseline-profile command
     baseline_parser = subparsers.add_parser(
@@ -106,6 +108,7 @@ def main():
     full_baseline_parser.add_argument('--product-flavor', default='staging', help='Product flavor (default: staging)')
     full_baseline_parser.add_argument('--build-type', default='perf', help='Build type (default: perf)')
     full_baseline_parser.add_argument('--run-name', help='Optional test run name')
+    full_baseline_parser.add_argument('--promon-shield', action='store_true', help='Enable Promon Shield (sets ENABLE_SHIELD=true)')
 
     # Interactive mode commands (module-specific)
     subparsers.add_parser(
@@ -142,7 +145,8 @@ def main():
             branch=args.branch,
             commit=args.commit,
             product_flavor=args.product_flavor,
-            build_type=args.build_type
+            build_type=args.build_type,
+            enable_shield=args.promon_shield
         )
     elif args.command == 'upload-and-test':
         # Non-interactive upload and test
@@ -182,6 +186,7 @@ def main():
             product_flavor=args.product_flavor,
             build_type=args.build_type,
             run_name=args.run_name,
+            enable_shield=args.promon_shield
         )
     elif args.command == 'full-pipeline':
         # Execute full pipeline
@@ -196,7 +201,8 @@ def main():
             product_flavor=args.product_flavor,
             build_type=args.build_type,
             run_name=args.run_name,
-            num_iterations=args.num_iterations
+            num_iterations=args.num_iterations,
+            enable_shield=args.promon_shield
         )
     elif args.command == 'build-interactive':
         # Interactive build workflow

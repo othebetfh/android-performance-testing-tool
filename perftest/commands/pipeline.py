@@ -399,7 +399,8 @@ def non_interactive_build(
     branch: str,
     commit: str,
     product_flavor: str = "staging",
-    build_type: str = "perf"
+    build_type: str = "perf",
+    enable_shield: bool = False
 ):
     """
     Build command.
@@ -429,6 +430,8 @@ def non_interactive_build(
     console.print(f"  Commit: {commit}")
     console.print(f"  Product flavor: {product_flavor}")
     console.print(f"  Build type: {build_type}")
+    if enable_shield:
+        console.print(f"  Promon Shield: enabled")
 
     # Check properties files
     if not check_properties_files(product_flavor):
@@ -440,7 +443,8 @@ def non_interactive_build(
         commit=commit,
         github_token=github_token,
         product_flavor=product_flavor,
-        build_type=build_type
+        build_type=build_type,
+        enable_shield=enable_shield
     )
 
     if not output_dir:
@@ -473,7 +477,8 @@ def non_interactive_full_pipeline(
     product_flavor: str = "staging",
     build_type: str = "perf",
     run_name: Optional[str] = None,
-    num_iterations: int = 150
+    num_iterations: int = 150,
+    enable_shield: bool = False
 ):
     """
     Full pipeline command.
@@ -500,6 +505,8 @@ def non_interactive_full_pipeline(
     console.print(f"  Product Flavor: {product_flavor}")
     console.print(f"  Build Type: {build_type}")
     console.print(f"  Test: {test_name}")
+    if enable_shield:
+        console.print(f"  Promon Shield: enabled")
 
     # Step 1: Build base version
     console.print("\n" + "=" * 60)
@@ -511,7 +518,8 @@ def non_interactive_full_pipeline(
             branch=base_branch,
             commit=base_commit,
             product_flavor=product_flavor,
-            build_type=build_type
+            build_type=build_type,
+            enable_shield=enable_shield
         )
     except SystemExit as e:
         console.print("[red]Base build failed[/red]")
@@ -527,7 +535,8 @@ def non_interactive_full_pipeline(
             branch=test_branch,
             commit=test_commit,
             product_flavor=product_flavor,
-            build_type=build_type
+            build_type=build_type,
+            enable_shield=enable_shield
         )
     except SystemExit as e:
         console.print("[red]Test build failed[/red]")
@@ -808,6 +817,7 @@ def non_interactive_full_baseline_pipeline(
     product_flavor: str = "staging",
     build_type: str = "perf",
     run_name: Optional[str] = None,
+    enable_shield: bool = False
 ):
     """
     Full baseline pipeline: build APK then generate baseline profile.
@@ -828,6 +838,8 @@ def non_interactive_full_baseline_pipeline(
     console.print(f"  Branch: {branch} @ {commit[:8]}")
     console.print(f"  Product Flavor: {product_flavor}")
     console.print(f"  Build Type: {build_type}")
+    if enable_shield:
+        console.print(f"  Promon Shield: enabled")
 
     console.print("\n" + "=" * 60)
     console.print("[bold cyan]Step 1/2: Building APK[/bold cyan]")
@@ -839,6 +851,7 @@ def non_interactive_full_baseline_pipeline(
             commit=commit,
             product_flavor=product_flavor,
             build_type=build_type,
+            enable_shield=enable_shield
         )
     except SystemExit:
         console.print("[red]Build failed[/red]")

@@ -253,6 +253,7 @@ def build_apk_interactive():
     commit = Prompt.ask("Git commit hash")
     flavor = Prompt.ask("Product flavor", default="staging")
     build_type = Prompt.ask("Build type", default="perf")
+    enable_shield = Confirm.ask("Enable Promon Shield?", default=False)
 
     console.print("\n[green]Building APK...[/green]\n")
 
@@ -260,7 +261,8 @@ def build_apk_interactive():
         branch=branch,
         commit=commit,
         product_flavor=flavor,
-        build_type=build_type
+        build_type=build_type,
+        enable_shield=enable_shield
     )
 
 
@@ -482,6 +484,7 @@ def full_pipeline_interactive():
     build_type = Prompt.ask("Build type", default="perf")
     run_name = Prompt.ask("Optional test run name", default="")
     num_iterations = IntPrompt.ask("Number of test iterations")
+    enable_shield = Confirm.ask("Enable Promon Shield?", default=False)
 
     console.print()
     if not Confirm.ask("Continue with full pipeline?"):
@@ -501,7 +504,8 @@ def full_pipeline_interactive():
         product_flavor=flavor,
         build_type=build_type,
         run_name=run_name if run_name else None,
-        num_iterations=num_iterations
+        num_iterations=num_iterations,
+        enable_shield=enable_shield
     )
 
 
@@ -622,6 +626,7 @@ def full_baseline_pipeline_interactive():
     flavor = Prompt.ask("Product flavor", default="staging")
     build_type = Prompt.ask("Build type", default="perf")
     run_name = Prompt.ask("Optional run name", default="")
+    enable_shield = Confirm.ask("Enable Promon Shield?", default=False)
 
     console.print()
     if not Confirm.ask("Continue with full baseline pipeline?"):
@@ -638,6 +643,7 @@ def full_baseline_pipeline_interactive():
         product_flavor=flavor,
         build_type=build_type,
         run_name=run_name if run_name else None,
+        enable_shield=enable_shield
     )
 
 
