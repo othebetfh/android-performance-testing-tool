@@ -62,8 +62,8 @@ def build_apk_for_pipeline(
     if apk_dir.exists():
         # Look for app and test/benchmark APKs
         apk_files = list(apk_dir.glob("*.apk"))
-        app_apks = [f for f in apk_files if f.name.startswith("app-")]
-        test_apks = [f for f in apk_files if not f.name.startswith("app-")]
+        app_apks = [f for f in apk_files if 'benchmark' not in f.name.lower()]
+        test_apks = [f for f in apk_files if 'benchmark' in f.name.lower()]
 
         if app_apks and test_apks:
             console.print(f"[green]✓[/green] Using cached build: {branch}@{commit_short}")

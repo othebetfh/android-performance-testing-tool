@@ -199,8 +199,8 @@ def non_interactive_upload_and_test(
         sys.exit(1)
 
     apk_files = list(apk_dir.glob("*.apk"))
-    app_apks = [f for f in apk_files if f.name.startswith("app-")]
-    test_apks = [f for f in apk_files if not f.name.startswith("app-")]
+    app_apks = [f for f in apk_files if 'benchmark' not in f.name.lower()]
+    test_apks = [f for f in apk_files if 'benchmark' in f.name.lower()]
 
     if not app_apks:
         console.print(f"[red]Error: App APK not found in {apk_dir}[/red]")
@@ -459,7 +459,7 @@ def non_interactive_build(
             console.print("\n[bold green]Build completed successfully![/bold green]")
             console.print(f"\n[bold]APK locations:[/bold]")
             for apk in apk_files:
-                apk_type = "App" if apk.name.startswith("app-") else "Test"
+                apk_type = "App" if 'benchmark' not in apk.name.lower() else "Test"
                 size_mb = apk.stat().st_size / (1024 * 1024)
                 console.print(f"  {apk_type:5}: {get_display_path(apk)} ({size_mb:.1f} MB)")
     else:
@@ -665,8 +665,8 @@ def non_interactive_generate_baseline_profile(
         sys.exit(1)
 
     apk_files = list(apk_dir.glob("*.apk"))
-    app_apks = [f for f in apk_files if f.name.startswith("app-")]
-    test_apks = [f for f in apk_files if not f.name.startswith("app-")]
+    app_apks = [f for f in apk_files if 'benchmark' not in f.name.lower()]
+    test_apks = [f for f in apk_files if 'benchmark' in f.name.lower()]
 
     if not app_apks:
         console.print(f"[red]Error: App APK not found in {apk_dir}[/red]")
