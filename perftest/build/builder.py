@@ -153,18 +153,21 @@ class GradleBuilder:
         if not self.google_services_file.exists():
             raise BuildError(f"Google services file not found: {self.google_services_file}")
 
-        # Copy to app folder
-        app_dir = self.project_dir / 'app'
-        if not app_dir.exists():
-            raise BuildError(f"App directory not found: {app_dir}")
-
-        dest = app_dir / 'google-services.json'
-        logger.info(f"Copying google-services.json to app folder")
-
         import shutil
-        shutil.copy2(self.google_services_file, dest)
 
-        logger.debug(f"Google services file copied: {dest}")
+        # Copy to every app module directory that exists, checking worldIdApp/
+        # first since that is this repo's module name rather than the conventional app/.
+        candidates = [self.project_dir / 'worldIdApp', self.project_dir / 'app']
+        app_dirs = [d for d in candidates if d.exists()]
+
+        if not app_dirs:
+            raise BuildError(f"No app module directory found under {self.project_dir}")
+
+        for app_dir in app_dirs:
+            dest = app_dir / 'google-services.json'
+            logger.info(f"Copying google-services.json to {app_dir.name}/")
+            shutil.copy2(self.google_services_file, dest)
+            logger.debug(f"Google services file copied: {dest}")
 
     def build(
         self,
