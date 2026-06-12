@@ -6,6 +6,8 @@ from typing import Optional
 
 from rich.console import Console
 
+from perftest.config import APP_NAMES
+
 console = Console()
 
 
@@ -55,14 +57,14 @@ def prompt_aws_credentials() -> dict[str, str]:
 
 def check_properties_files(product_flavor: str) -> bool:
     """Check if required properties files exist."""
-    properties_file = Path(f"/workspace/config/properties/{product_flavor}.properties")
+    for app in APP_NAMES:
+        properties_file = Path(f"/workspace/config/properties/{product_flavor}.{app}.properties")
+        if not properties_file.exists():
+            console.print(f"\n[red]Error: {product_flavor}.{app}.properties not found in /workspace/config/properties/[/red]")
+            console.print(f"Please copy it to the config directory on your host machine")
+            return False
+
     google_services_file = Path("/workspace/config/properties/google-services.json")
-
-    if not properties_file.exists():
-        console.print(f"\n[red]Error: {product_flavor}.properties not found in /workspace/config/properties/[/red]")
-        console.print(f"Please copy it to the config directory on your host machine")
-        return False
-
     if not google_services_file.exists():
         console.print(f"\n[red]Error: google-services.json not found in /workspace/config/properties/[/red]")
         console.print(f"Please copy it to the config directory on your host machine")

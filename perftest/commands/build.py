@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from perftest.build import GradleBuilder, clone_repository, validate_apk_pair
-from perftest.config import ConfigManager
+from perftest.config import APP_NAMES, ConfigManager
 from .utils import check_properties_files
 
 console = Console()
@@ -48,7 +48,10 @@ def build_apk_for_pipeline(
         console.print(f"[red]Properties files not found for flavor: {product_flavor}[/red]")
         return None
 
-    properties_file = Path(f"/workspace/config/properties/{product_flavor}.properties")
+    properties_files = [
+        Path(f"/workspace/config/properties/{product_flavor}.{app}.properties")
+        for app in APP_NAMES
+    ]
     google_services_file = Path("/workspace/config/properties/google-services.json")
 
     # Create output directory based on branch and commit
@@ -109,7 +112,7 @@ def build_apk_for_pipeline(
 
             builder = GradleBuilder(
                 clone_dir,
-                properties_file=properties_file,
+                properties_files=properties_files,
                 google_services_file=google_services_file,
                 github_user=github_user,
                 github_token=github_token,

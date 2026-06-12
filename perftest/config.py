@@ -14,6 +14,8 @@ from perftest.utils.exceptions import ConfigurationError
 # Load environment variables from .env file if it exists
 load_dotenv()
 
+APP_NAMES = ["worldApp", "worldIdApp"]
+
 
 class BuildConfig(BaseModel):
     """Build configuration."""

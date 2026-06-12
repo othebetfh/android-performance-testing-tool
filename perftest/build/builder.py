@@ -19,7 +19,7 @@ class GradleBuilder:
         project_dir: Path,
         android_home: Optional[str] = None,
         java_home: Optional[str] = None,
-        properties_file: Optional[Path] = None,
+        properties_files: Optional[List[Path]] = None,
         google_services_file: Optional[Path] = None,
         github_user: Optional[str] = None,
         github_token: Optional[str] = None,
@@ -40,7 +40,7 @@ class GradleBuilder:
         self.project_dir = project_dir
         self.android_home = android_home or os.getenv('ANDROID_HOME', '/opt/android-sdk')
         self.java_home = java_home or os.getenv('JAVA_HOME', '/usr/lib/jvm/java-17-openjdk')
-        self.properties_file = properties_file
+        self.properties_files = properties_files or []
         self.google_services_file = google_services_file
         self.github_user = github_user
         self.github_token = github_token
@@ -68,8 +68,8 @@ class GradleBuilder:
         logger.debug(f"  Project dir: {project_dir}")
         logger.debug(f"  ANDROID_HOME: {self.android_home}")
         logger.debug(f"  JAVA_HOME: {self.java_home}")
-        if self.properties_file:
-            logger.debug(f"  Properties file: {self.properties_file}")
+        for f in self.properties_files:
+            logger.debug(f"  Properties file: {f}")
 
     def _create_local_properties(self) -> None:
         """
@@ -126,22 +126,19 @@ class GradleBuilder:
 
     def _copy_properties_file(self) -> None:
         """
-        Copy properties file into project root.
+        Copy all per-app properties files into project root.
         """
-        if not self.properties_file:
-            raise BuildError("Properties file is required but not provided")
-
-        if not self.properties_file.exists():
-            raise BuildError(f"Properties file not found: {self.properties_file}")
-
-        # Copy to project root with the same filename
-        dest = self.project_dir / self.properties_file.name
-        logger.info(f"Copying {self.properties_file.name} to project root")
+        if not self.properties_files:
+            raise BuildError("Properties files are required but not provided")
 
         import shutil
-        shutil.copy2(self.properties_file, dest)
-
-        logger.debug(f"Properties file copied: {dest}")
+        for properties_file in self.properties_files:
+            if not properties_file.exists():
+                raise BuildError(f"Properties file not found: {properties_file}")
+            dest = self.project_dir / properties_file.name
+            logger.info(f"Copying {properties_file.name} to project root")
+            shutil.copy2(properties_file, dest)
+            logger.debug(f"Properties file copied: {dest}")
 
     def _copy_google_services_file(self) -> None:
         """
